@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template_string
 import requests
 from ddtrace import tracer
 from dotenv import load_dotenv
@@ -15,7 +15,7 @@ RAPIDAPI_HOST = 'api-football-v1.p.rapidapi.com'
 BASE_URL = 'https://api-football-v1.p.rapidapi.com/v3/predictions'
 
 @tracer.wrap(name='my_resource1')
-@app.route("/api")
+@app.route("/predictions")
 def hello_world():
     headers = {
         'x-rapidapi-host': RAPIDAPI_HOST,
@@ -26,11 +26,11 @@ def hello_world():
     }
     response = requests.get(BASE_URL, headers=headers, params=params)
     if response.status_code != 200:
-        return {"error": "Failed to fetch data"}, response.status_code
+        return f"Error: Failed to fetch data. Status code: {response.status_code}", response.status_code
 
     predictions = response.json().get('response', [])
     if not predictions:
-        return {"error": "No predictions found"}, 404
+        return "No predictions found", 404
 
     match_data = predictions[0]
 
@@ -66,67 +66,66 @@ def hello_world():
     # Yellow Cards for Home Team
     yellow_cards = match_data['teams']['home']['league']['cards']['yellow']
 
-    # Construct the response
-    response_data = {
-        "basic_information": {
-            "league": f"{league_name} ({league_country})",
-            "season": season,
-            "home_team": home_team,
-            "away_team": away_team
-        },
-        "predictions": {
-            "predicted_winner": predicted_winner,
-            "win_or_draw": win_or_draw,
-            "advice": advice,
-            "percentages": {
-                "home": percent_home,
-                "draw": percent_draw,
-                "away": percent_away
-            }
-        },
-        "team_statistics": {
-            "home_team": {
-                "form": home_team_form,
-                "goals_for": home_team_goals_for,
-                "goals_against": home_team_goals_against
-            },
-            "away_team": {
-                "form": away_team_form,
-                "goals_for": away_team_goals_for,
-                "goals_against": away_team_goals_against
-            }
-        },
-        "head_to_head": {
-            "number_of_previous_matches": len(h2h_matches),
-            "matches": [
-                {
-                    "date": match['fixture']['date'][:10],
-                    "home_team": match['teams']['home']['name'],
-                    "away_team": match['teams']['away']['name'],
-                    "home_goals": match['goals']['home'],
-                    "away_goals": match['goals']['away']
-                }
-                for match in h2h_matches
-            ]
-        },
-        "comparison_data": {
-            metric: {
-                "home": values['home'],
-                "away": values['away']
-            }
-            for metric, values in comparison_data.items()
-        },
-        "yellow_cards": {
-            time_range: {
-                "total": data['total'],
-                "percentage": data['percentage']
-            }
-            for time_range, data in yellow_cards.items()
-            if data['total'] is not None
-        }
-    }
+    # Construct the HTML response
+    html_response = f"""
+    <html>
+    <head>
+        <title>Football Predictions</title>
+    </head>
+    <body>
+        <h1>Basic Information</h1>
+        <p>League: {league_name} ({league_country})</p>
+        <p>Season: {season}</p>
+        <p>Home Team: {home_team}</p>
+        <p>Away Team: {away_team}</p>
 
-    return response_data
+        <h1>Predictions</h1>
+        <p>Predicted Winner: {predicted_winner}</p>
+        <p>Win or Draw: {win_or_draw}</p>
+        <p>Advice: {advice}</p>
+        <p>Percentage Chances: Home {percent_home}, Draw {percent_draw}, Away {percent_away}</p>
+
+        <h1>Team Statistics</h1>
+        <h2>{home_team} Statistics</h2>
+        <p>Last 5 Form: {home_team_form}</p>
+        <p>Goals Scored (Last 5): {home_team_goals_for}</p>
+        <p>Goals Conceded (Last 5): {home_team_goals_against}</p>
+
+        <h2>{away_team} Statistics</h2>
+        <p>Last 5 Form: {away_team_form}</p>
+        <p>Goals Scored (Last 5): {away_team_goals_for}</p>
+        <p>Goals Conceded (Last 5): {away_team_goals_against}</p>
+
+        <h1>Head to Head</h1>
+        <p>Number of previous matches: {len(h2h_matches)}</p>
+        <ul>
+            {''.join([
+                f"<li>Match {i+1} ({match['fixture']['date'][:10]}): {match['teams']['home']['name']} {match['goals']['home']}-{match['goals']['away']} {match['teams']['away']['name']}</li>"
+                for i, match in enumerate(h2h_matches[:3])
+            ])}
+        </ul>
+
+        <h1>Comparison Data</h1>
+        <ul>
+            {''.join([
+                f"<li>{metric.capitalize()}: Home {values['home']}, Away {values['away']}</li>"
+                for metric, values in comparison_data.items()
+            ])}
+        </ul>
+
+        <h1>Yellow Cards for Home Team</h1>
+        <ul>
+            {''.join([
+                f"<li>{time_range}: {data['total']} cards ({data['percentage']})</li>"
+                for time_range, data in yellow_cards.items()
+                if data['total'] is not None
+            ])}
+        </ul>
+    </body>
+    </html>
+    """
+
+    return html_response
 
 if __name__ == "__main__":
     app.run()
