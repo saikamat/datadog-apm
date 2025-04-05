@@ -1,0 +1,5 @@
+.env
+__pycache__/
+*.md
+*.bck
+datadog-*.yaml
